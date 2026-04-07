@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>NO2 Analyser BLE</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: #0a0c12;
+    color: #c8cdd8;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* ---- Header ---- */
+  .header {
+    background: #171a24;
+    border: 1px solid #2a2d3a;
+    border-radius: 14px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .device-row { display: flex; align-items: center; gap: 10px; }
+
+  .dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: #3a3d50;
+    transition: background 0.3s;
+    flex-shrink: 0;
+  }
+  .dot.connecting { background: #e8a020; animation: pulse 1s infinite; }
+  .dot.connected  { background: #4caf72; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+  .device-name {
+    font-size: 13px; font-weight: 500;
+    color: #6a6f88; letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .device-name.connected { color: #c8cdd8; }
+
+  .btn-connect {
+    background: #1e3a5f;
+    border: 1px solid #2a5a9f;
+    color: #6baed6;
+    border-radius: 8px;
+    padding: 7px 16px;
+    font-size: 12px;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .btn-connect:hover  { background: #264a7a; }
+  .btn-connect.on     { background: #1a3a28; border-color: #2a7a4a; color: #4caf72; }
+  .btn-connect:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ---- Résultat ---- */
+  .result-card {
+    background: #0d1e14;
+    border: 1px solid #1a4a2a;
+    border-radius: 14px;
+    padding: 16px 20px;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .result-card.visible { display: flex; }
+
+  .result-left {}
+  .result-label { font-size: 11px; color: #4caf72; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .result-value { font-size: 38px; font-weight: 500; letter-spacing: -0.02em; font-family: 'Share Tech Mono', monospace; }
+  .result-unit  { font-size: 14px; color: #5a8a6a; margin-top: 2px; }
+
+  .result-right { text-align: right; }
+  .seuil-label  { font-size: 11px; color: #3a5a48; margin-bottom: 4px; }
+  .seuil-badge  {
+    font-size: 13px; font-weight: 500;
+    padding: 5px 12px; border-radius: 20px;
+    display: inline-block;
+  }
+  .seuil-ok      { background: #0d2a1a; color: #4caf72; border: 1px solid #1a5a2a; }
+  .seuil-warn    { background: #2a1e0a; color: #e8a020; border: 1px solid #5a3a0a; }
+  .seuil-danger  { background: #2a0d0d; color: #e05040; border: 1px solid #5a1a1a; }
+
+  /* ---- Terminal ---- */
+  .terminal-wrap {
+    background: #070910;
+    border: 1px solid #1a1d2a;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .terminal-bar {
+    background: #0f1117;
+    border-bottom: 1px solid #1a1d2a;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .terminal-title { font-size: 11px; color: #3a3d50; text-transform: uppercase; letter-spacing: 0.1em; }
+  .btn-clear {
+    font-size: 11px; color: #3a3d50; background: none; border: none;
+    cursor: pointer; font-family: 'DM Sans', sans-serif;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    transition: color 0.2s;
+  }
+  .btn-clear:hover { color: #6a6f88; }
+
+  .terminal {
+    font-family: 'Share Tech Mono', 'Courier New', monospace;
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: #c8a84a;
+    padding: 12px 14px;
+    height: 260px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+  }
+  .terminal::-webkit-scrollbar { width: 4px; }
+  .terminal::-webkit-scrollbar-track { background: transparent; }
+  .terminal::-webkit-scrollbar-thumb { background: #2a2d3a; border-radius: 2px; }
+
+  .tl      { color: #c8a84a; margin-bottom: 1px; word-break: break-all; }
+  .tl.dim  { color: #4a4730; }
+  .tl.ok   { color: #4caf72; }
+  .tl.warn { color: #e07030; }
+  .tl.info { color: #5080c0; }
+  .tl.res  { color: #ffffff; font-weight: bold; }
+
+  .cursor {
+    display: inline-block; width: 7px; height: 14px;
+    background: #c8a84a; vertical-align: text-bottom;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---- Commandes ---- */
+  .cmd-section {
+    background: #0f1117;
+    border: 1px solid #1a1d2a;
+    border-radius: 14px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .cmd-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .cmd {
+    background: #171a24;
+    border: 1px solid #252840;
+    border-radius: 10px;
+    padding: 10px 6px 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .cmd:active { transform: scale(0.94); }
+  .cmd:disabled { opacity: 0.3; cursor: not-allowed; }
+  .cmd-key  { font-size: 18px; font-weight: 500; color: #b0b5c8; font-family: 'Share Tech Mono', monospace; }
+  .cmd-desc { font-size: 10px; color: #5a5f78; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .cmd.green .cmd-key { color: #4caf72; }
+  .cmd.green { background: #0d1e14; border-color: #1a4a2a; }
+  .cmd.red   .cmd-key { color: #d06050; }
+  .cmd.red   { background: #1a0d0d; border-color: #4a1a1a; }
+
+  .btn-enter {
+    width: 100%;
+    padding: 13px;
+    background: #131826;
+    border: 1px solid #252840;
+    border-radius: 10px;
+    color: #5070a8;
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-enter.active {
+    background: #1a2850;
+    border-color: #3050a0;
+    color: #80a8e0;
+    animation: glow 1.5s ease-in-out infinite;
+  }
+  @keyframes glow { 0%,100%{box-shadow:0 0 0 0 rgba(80,120,200,0)} 50%{box-shadow:0 0 12px 2px rgba(80,120,200,0.25)} }
+  .btn-enter:active:not(:disabled) { transform: scale(0.98); }
+  .btn-enter:disabled { opacity: 0.25; cursor: not-allowed; }
+  .enter-icon { font-size: 20px; }
+
+  /* ---- Notice no-BLE ---- */
+  .notice {
+    background: #1a1500;
+    border: 1px solid #3a3000;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 12px;
+    line-height: 1.7;
+    color: #906010;
+  }
+  .notice strong { color: #c09020; }
+  .notice a { color: #c09020; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header connexion -->
+  <div class="header">
+    <div class="device-row">
+      <div class="dot" id="dot"></div>
+      <span class="device-name" id="devname">NO2-Analyser</span>
+    </div>
+    <button class="btn-connect" id="btnConnect" onclick="toggleConnect()">Connecter</button>
+  </div>
+
+  <!-- Résultat NO2 -->
+  <div class="result-card" id="resultCard">
+    <div class="result-left">
+      <div class="result-label">NO₂ mesuré</div>
+      <div class="result-value" id="resultVal">—</div>
+      <div class="result-unit">mg / L</div>
+    </div>
+    <div class="result-right">
+      <div class="seuil-label">Seuil OMS 0.2 mg/L</div>
+      <div class="seuil-badge" id="seuilBadge">—</div>
+    </div>
+  </div>
+
+  <!-- Terminal -->
+  <div class="terminal-wrap">
+    <div class="terminal-bar">
+      <span class="terminal-title">Console</span>
+      <button class="btn-clear" onclick="clearTerminal()">Effacer</button>
+    </div>
+    <div class="terminal" id="term"></div>
+  </div>
+
+  <!-- Commandes -->
+  <div class="cmd-section">
+    <div class="cmd-grid">
+      <button class="cmd"       id="btnC" disabled onclick="send('C')"><span class="cmd-key">C</span><span class="cmd-desc">Étalonner</span></button>
+      <button class="cmd green" id="btnM" disabled onclick="send('M')"><span class="cmd-key">M</span><span class="cmd-desc">Mesurer</span></button>
+      <button class="cmd"       id="btnD" disabled onclick="send('D')"><span class="cmd-key">D</span><span class="cmd-desc">Diag</span></button>
+      <button class="cmd red"   id="btnR" disabled onclick="send('R')"><span class="cmd-key">R</span><span class="cmd-desc">Effacer</span></button>
+    </div>
+    <button class="btn-enter" id="btnEnter" disabled onclick="send('\r')">
+      <span class="enter-icon">↵</span>
+      <span id="enterLabel">Entrée</span>
+    </button>
+  </div>
+
+  <!-- Avertissement si Web Bluetooth absent -->
+  <div class="notice" id="nobleNotice" style="display:none">
+    <strong>Web Bluetooth non disponible.</strong><br>
+    Cette app nécessite <strong>Chrome sur Android</strong> (version 56+).<br>
+    Elle doit être servie en <strong>HTTPS</strong> (ex : GitHub Pages).<br>
+    Firefox et Safari ne supportent pas Web Bluetooth.
+  </div>
+
+</div>
+
+<script>
+// ── UUIDs NUS ──────────────────────────────────────────────
+const NUS_SVC = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const NUS_TX  = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // ESP32→app (notify)
+const NUS_RX  = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // app→ESP32 (write)
+
+// ── État ──────────────────────────────────────────────────
+let device    = null;
+let rxChar    = null;
+let connected = false;
+let rxBuf     = "";
+
+// ── Terminal ──────────────────────────────────────────────
+const term = document.getElementById("term");
+
+function log(text, cls = "") {
+  if (!text.trim()) return;
+  const d = document.createElement("div");
+  d.className = "tl " + cls;
+  d.textContent = text;
+  term.appendChild(d);
+  term.scrollTop = term.scrollHeight;
+}
+
+function clearTerminal() {
+  term.innerHTML = "";
+  if (connected) {
+    const c = document.createElement("span");
+    c.className = "cursor";
+    term.appendChild(c);
+  }
+}
+
+function lineClass(t) {
+  if (t.startsWith("RESULT:") || t.includes(">> NO2")) return "res";
+  if (t.includes("OK") || t.includes("COMPLET") || t.includes("Sauvegarde")) return "ok";
+  if (t.includes("!!") || t.includes("Non-monotone") || t.includes("Erreur")) return "warn";
+  if (t.startsWith("=") || t.startsWith("[C") || t.startsWith("[M") || t.startsWith("[D") || t.startsWith("---")) return "info";
+  if (t.startsWith("  ")) return "dim";
+  return "";
+}
+
+// ── Réception BLE ─────────────────────────────────────────
+function onNotify(event) {
+  rxBuf += new TextDecoder().decode(event.target.value);
+  let nl;
+  while ((nl = rxBuf.indexOf("\n")) !== -1) {
+    const line = rxBuf.slice(0, nl).trimEnd();
+    rxBuf = rxBuf.slice(nl + 1);
+    handleLine(line);
+  }
+}
+
+function handleLine(line) {
+  if (line === "WAIT_ENTER") {
+    document.getElementById("btnEnter").classList.add("active");
+    document.getElementById("enterLabel").textContent = "Confirmer / Lancer acquisition";
+    return;
+  }
+  if (line === "MENU_READY") {
+    document.getElementById("btnEnter").classList.remove("active");
+    document.getElementById("enterLabel").textContent = "Entrée";
+    return;
+  }
+  if (line.startsWith("RESULT:")) {
+    const v = parseFloat(line.slice(7));
+    if (!isNaN(v)) showResult(v);
+    return;
+  }
+  log(line, lineClass(line));
+}
+
+function showResult(v) {
+  document.getElementById("resultCard").classList.add("visible");
+  document.getElementById("resultVal").textContent = v.toFixed(4);
+  document.getElementById("resultVal").style.color =
+    v < 0.05 ? "#4caf72" : v < 0.2 ? "#e8a020" : "#e05040";
+
+  const badge = document.getElementById("seuilBadge");
+  if (v < 0.2)      { badge.textContent = "Normal";   badge.className = "seuil-badge seuil-ok"; }
+  else if (v < 0.4) { badge.textContent = "Élevé";    badge.className = "seuil-badge seuil-warn"; }
+  else              { badge.textContent = "Dépassé";  badge.className = "seuil-badge seuil-danger"; }
+}
+
+// ── Connexion / Déconnexion ────────────────────────────────
+async function toggleConnect() {
+  if (connected) { disconnect(); return; }
+  await connect();
+}
+
+async function connect() {
+  if (!navigator.bluetooth) {
+    document.getElementById("nobleNotice").style.display = "block";
+    return;
+  }
+  setStatus("connecting");
+  log("Recherche de NO2-Analyser...", "info");
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [NUS_SVC] }]
+    });
+    device.addEventListener("gattserverdisconnected", onDisconnect);
+    const server  = await device.gatt.connect();
+    const service = await server.getPrimaryService(NUS_SVC);
+    const txChar  = await service.getCharacteristic(NUS_TX);
+    rxChar        = await service.getCharacteristic(NUS_RX);
+    await txChar.startNotifications();
+    txChar.addEventListener("characteristicvaluechanged", onNotify);
+    setStatus("connected", device.name || "NO2-Analyser");
+    log("Connecté — " + (device.name || "NO2-Analyser"), "ok");
+    // Déclenche l'affichage du menu sur l'ESP32
+    await send("\n");
+  } catch (e) {
+    setStatus("disconnected");
+    log("Erreur : " + e.message, "warn");
+  }
+}
+
+function disconnect() {
+  if (device?.gatt?.connected) device.gatt.disconnect();
+}
+
+function onDisconnect() {
+  setStatus("disconnected");
+  rxChar = null;
+  log("Déconnecté.", "warn");
+}
+
+async function send(cmd) {
+  if (!rxChar || !connected) return;
+  try {
+    await rxChar.writeValueWithoutResponse(new TextEncoder().encode(cmd + "\n"));
+    if (cmd !== "\r" && cmd !== "\n") {
+      document.getElementById("btnEnter").classList.remove("active");
+      document.getElementById("enterLabel").textContent = "Entrée";
+    }
+  } catch (e) {
+    log("Erreur envoi : " + e.message, "warn");
+  }
+}
+
+// ── UI helpers ────────────────────────────────────────────
+function setStatus(state, name) {
+  const dot  = document.getElementById("dot");
+  const dn   = document.getElementById("devname");
+  const btn  = document.getElementById("btnConnect");
+  const btns = ["btnC","btnM","btnD","btnR","btnEnter"];
+
+  dot.className = "dot " + state;
+  connected = (state === "connected");
+
+  if (state === "connected") {
+    dn.textContent = name || "NO2-Analyser";
+    dn.className = "device-name connected";
+    btn.textContent = "Déconnecter";
+    btn.className = "btn-connect on";
+    btns.forEach(id => document.getElementById(id).disabled = false);
+    // Ajoute le curseur clignotant
+    const c = document.createElement("span");
+    c.className = "cursor"; c.id = "termCursor";
+    term.appendChild(c);
+    term.scrollTop = term.scrollHeight;
+  } else {
+    dn.textContent = state === "connecting" ? "Connexion..." : "NO2-Analyser";
+    dn.className = "device-name";
+    btn.textContent = state === "connecting" ? "..." : "Connecter";
+    btn.className = "btn-connect";
+    btn.disabled = (state === "connecting");
+    btns.forEach(id => document.getElementById(id).disabled = true);
+    document.getElementById("btnEnter").classList.remove("active");
+    document.getElementById("enterLabel").textContent = "Entrée";
+    const c = document.getElementById("termCursor");
+    if (c) c.remove();
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────
+if (!navigator.bluetooth) {
+  // Avertissement discret ; l'utilisateur peut quand même charger la page
+  log("Web Bluetooth non détecté. Ouvrir dans Chrome Android (HTTPS).", "warn");
+}
+log("NO2-Analyser — prêt.", "info");
+log("Appuyez sur Connecter pour rejoindre l'ESP32.", "dim");
+</script>
+</body>
+</html>
