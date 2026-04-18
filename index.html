@@ -345,6 +345,9 @@ function showQButton(visible) {
   const btn = document.getElementById('btnQ');
   btn.style.display = visible ? 'flex' : 'none';
 }
+
+function toggleTerm() {
+  termOpen = !termOpen;
   term.classList.toggle('coll', !termOpen);
   document.getElementById('tBtn').textContent = termOpen ? 'Réduire' : 'Agrandir';
 }
