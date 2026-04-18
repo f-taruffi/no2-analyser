@@ -220,6 +220,11 @@ body{font-family:var(--sans);background:var(--bg);color:var(--tx);min-height:100
   <button class="btn-enter" id="btnEnter" disabled onclick="sendEnter()">
     <span class="eico">↵</span><span id="enterLbl">Entrée</span>
   </button>
+  <button class="cmd" id="btnQ" disabled onclick="send('Q')"
+          style="width:100%;padding:11px 8px;border-radius:10px;display:none;flex-direction:row;gap:10px;align-items:center;justify-content:center">
+    <span class="ck" style="font-size:16px">Q</span>
+    <span class="cd" style="font-size:12px;letter-spacing:.05em">Retour au menu</span>
+  </button>
 </div>
 
 <!-- Étalonnages -->
@@ -336,8 +341,10 @@ function lcls(t) {
   return '';
 }
 
-function toggleTerm() {
-  termOpen = !termOpen;
+function showQButton(visible) {
+  const btn = document.getElementById('btnQ');
+  btn.style.display = visible ? 'flex' : 'none';
+}
   term.classList.toggle('coll', !termOpen);
   document.getElementById('tBtn').textContent = termOpen ? 'Réduire' : 'Agrandir';
 }
@@ -365,6 +372,7 @@ function parseLine(line) {
   if (line === 'MENU_READY') {
     document.getElementById('btnEnter').classList.remove('active');
     document.getElementById('enterLbl').textContent = 'Entrée';
+    showQButton(false);  // retour au menu → masquer Q
     return;
   }
 
@@ -394,7 +402,13 @@ function parseLine(line) {
       curResult = { val:parseFloat(p[0]), unit:p[1], name:p[2], id:ANALYTES[curIdx]?.id||'' };
       showResult(curResult);
     }
+    showQButton(true);  // après un résultat, proposer Q pour revenir au menu
     return;
+  }
+
+  // Afficher Q dès qu'on entre en mode MESURE ou CALIBRATION
+  if (line.includes('--- MESURE') || line.includes('--- ETALONNAGE')) {
+    showQButton(true);
   }
 
   // ── Export calibration depuis ESP32 ──
@@ -807,7 +821,7 @@ function setConn(state, name) {
   document.getElementById('dot').className = 'dot ' + state;
   const dn  = document.getElementById('devnm');
   const btn = document.getElementById('btnConn');
-  const ids = ['btnC','btnM','btnD','btnR','btnEnter'];
+  const ids = ['btnC','btnM','btnD','btnR','btnEnter','btnQ'];
   if (state==='connected') {
     dn.textContent = name||'AquaAnalyser'; dn.className='dev-nm on';
     btn.textContent='Déconnecter'; btn.className='btn-conn on'; btn.disabled=false;
@@ -821,6 +835,7 @@ function setConn(state, name) {
     ids.forEach(id=>document.getElementById(id).setAttribute('disabled',''));
     document.getElementById('btnEnter').classList.remove('active');
     document.getElementById('enterLbl').textContent='Entrée';
+    showQButton(false);
     const c=document.getElementById('tcur'); if(c)c.remove();
     document.getElementById('btnExpCal').disabled=true;
   }
